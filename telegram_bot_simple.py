@@ -18,12 +18,12 @@ TOKEN = os.getenv("TELEGRAM_TOKEN", "7482241317:AAHt0GdV71rTPBMFsyGVkS_1b-q8hCuQ
 ALLOWED_CHAT_IDS = [int(x) for x in os.getenv("ALLOWED_CHAT_IDS", "612838063").split(",")]
 
 # URLs servizi (da docker-compose)
-NETDATA_URL = os.getenv("NETDATA_URL", "http://nas-netdata:19999")
-SCRUTINY_URL = os.getenv("SCRUTINY_URL", "http://nas-scrutiny:8086")
-UPTIME_KUMA_URL = os.getenv("UPTIME_KUMA_URL", "http://nas-uptime-kuma:3001")
-DUPLICATI_URL = os.getenv("DUPLICATI_URL", "http://nas-duplicati:8200")
-PORTAINER_URL = os.getenv("PORTAINER_URL", "http://portainer:9000")
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
+NETDATA_URL = os.getenv("NETDATA_URL", "http://localhost:19999")
+SCRUTINY_URL = os.getenv("SCRUTINY_URL", "http://localhost:8086")
+UPTIME_KUMA_URL = os.getenv("UPTIME_KUMA_URL", "http://localhost:3001")
+DUPLICATI_URL = os.getenv("DUPLICATI_URL", "http://localhost:8200")
+PORTAINER_URL = os.getenv("PORTAINER_URL", "http://localhost:9000")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 
 # Container critici da monitorare
 CRITICAL_CONTAINERS = [
