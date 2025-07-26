@@ -1,0 +1,177 @@
+version: '3.8'
+
+# Stack Monitoring NAS - Integrazione con setup esistente
+# Backup source: /mnt/nas/docker/ (dati container)
+# Porte libere per evitare conflitti con servizi esistenti
+
+services:
+  # =================== MONITORING SISTEMA ===================
+  
+  # Netdata - Monitoring real-time (CPU, RAM, Dischi, Temperature)
+  netdata:
+    image: netdata/netdata:latest
+    container_name: nas-netdata
+    hostname: nas-netdata
+    restart: unless-stopped
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /etc/passwd:/host/etc/passwd:ro
+      - /etc/group:/host/etc/group:ro
+      - /etc/os-release:/host/etc/os-release:ro
+      - /dev:/host/dev:ro
+    ports:
+      - "19999:19999"  # Porta libera
+    environment:
+      - DOCKER_HOST=/var/run/docker.sock
+      - NETDATA_DISABLE_TELEMETRY=1
+    
+  # =================== SMART & DISK MONITORING ===================
+  
+  # Scrutiny - SMART monitoring dischi sda, sdb, nvme
+  scrutiny:
+    image: ghcr.io/analogj/scrutiny:master-omnibus
+    container_name: nas-scrutiny
+    restart: unless-stopped
+    cap_add:
+      - SYS_RAWIO
+      - SYS_ADMIN
+    volumes:
+      - /run/udev:/run/udev:ro
+      - /dev:/dev:ro
+      - scrutiny_config:/opt/scrutiny/config
+      - scrutiny_web:/opt/scrutiny/web
+    ports:
+      - "8086:8086"  # Porta libera
+    environment:
+      - COLLECTOR_API_ENDPOINT=http://localhost:8086
+      - SCRUTINY_WEB_INFLUXDB_RETENTION_POLICY=basic
+      - SCRUTINY_COLLECTOR_RUN_STARTUP=true
+    devices:
+      - /dev/sda
+      - /dev/sdb
+      - /dev/nvme0n1
+      
+  # =================== BACKUP VERSIONING ===================
+  
+  # Duplicati - Backup automatico /mnt/nas/docker/ con versioning
+  duplicati:
+    image: lscr.io/linuxserver/duplicati:latest
+    container_name: nas-duplicati
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Rome
+    volumes:
+      - duplicati_config:/config
+      - /mnt/nas/docker:/source:ro           # Source: dati container
+      - /mnt/nas/backup/duplicati:/backups   # Destination backup
+      - /tmp:/tmp                            # Temp space
+    ports:
+      - "8200:8200"  # Porta libera
+      
+  # =================== SERVICE MONITORING ===================
+  
+  # Uptime Kuma - Monitoring servizi e VPN transmission-openvpn
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: nas-uptime-kuma
+    restart: unless-stopped
+    volumes:
+      - uptime_data:/app/data
+    ports:
+      - "3001:3001"  # Porta libera
+    environment:
+      - TZ=Europe/Rome
+      
+  # =================== BTRFS MAINTENANCE ===================
+  
+  # BTRFS Maintenance automation per /mnt/nas RAID1
+  btrfs-maintenance:
+    image: alpine:latest
+    container_name: nas-btrfs-maintenance
+    restart: unless-stopped
+    privileged: true  # Necessario per btrfs commands
+    volumes:
+      - /mnt/nas:/nas:rw
+      - /usr/bin/btrfs:/usr/bin/btrfs:ro
+      - /sbin/btrfs:/sbin/btrfs:ro
+      - btrfs_logs:/var/log
+    command: >
+      sh -c "
+        apk add --no-cache dcron tzdata &&
+        cp /usr/share/zoneinfo/Europe/Rome /etc/localtime &&
+        echo 'Europe/Rome' > /etc/timezone &&
+        echo '# BTRFS Maintenance Schedule' > /etc/crontabs/root &&
+        echo '# Weekly scrub (Sunday 2 AM)' >> /etc/crontabs/root &&
+        echo '0 2 * * 0 /usr/bin/btrfs scrub start /nas && echo \"$(date): BTRFS scrub started on /nas\" >> /var/log/btrfs.log' >> /etc/crontabs/root &&
+        echo '# Monthly balance (1st day 3 AM)' >> /etc/crontabs/root &&
+        echo '0 3 1 * * /usr/bin/btrfs balance start -dusage=50 -musage=50 /nas && echo \"$(date): BTRFS balance completed\" >> /var/log/btrfs.log' >> /etc/crontabs/root &&
+        echo '# Bi-weekly defrag (15th day 4 AM)' >> /etc/crontabs/root &&
+        echo '0 4 15 * * find /nas -type f -exec /usr/bin/btrfs filesystem defragment {} \; && echo \"$(date): BTRFS defrag completed\" >> /var/log/btrfs.log' >> /etc/crontabs/root &&
+        mkdir -p /var/log &&
+        touch /var/log/btrfs.log &&
+        echo \"$(date): BTRFS maintenance container started\" >> /var/log/btrfs.log &&
+        echo \"Scheduled tasks:\" >> /var/log/btrfs.log &&
+        echo \"- Weekly scrub: Sunday 2 AM\" >> /var/log/btrfs.log &&
+        echo \"- Monthly balance: 1st day 3 AM\" >> /var/log/btrfs.log &&
+        echo \"- Bi-weekly defrag: 15th day 4 AM\" >> /var/log/btrfs.log &&
+        crond -f -d 8
+      "
+    
+  # =================== TELEGRAM BOT ENHANCED ===================
+  
+  # Bot Telegram integrato con tutti i servizi
+  telegram-bot-enhanced:
+    build: 
+      context: .
+      dockerfile: Dockerfile.telegrambot
+    container_name: nas-telegram-bot
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /mnt/nas:/mnt/nas:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    environment:
+      - TELEGRAM_TOKEN=7482241317:AAHt0GdV71rTPBMFsyGVkS_1b-q8hCuQZpM
+      - ALLOWED_CHAT_IDS=612838063
+      - NETDATA_URL=http://nas-netdata:19999
+      - PORTAINER_URL=http://portainer:9000
+      - SCRUTINY_URL=http://nas-scrutiny:8086
+      - UPTIME_KUMA_URL=http://nas-uptime-kuma:3001
+      - DUPLICATI_URL=http://nas-duplicati:8200
+      - OLLAMA_URL=http://ollama:11434
+    depends_on:
+      - netdata
+      - scrutiny
+      - uptime-kuma
+    networks:
+      - monitoring-net
+      - default
+
+volumes:
+  scrutiny_config:
+    name: nas_scrutiny_config
+  scrutiny_web:
+    name: nas_scrutiny_web
+  duplicati_config:
+    name: nas_duplicati_config
+  uptime_data:
+    name: nas_uptime_data
+  btrfs_logs:
+    name: nas_btrfs_logs
+
+networks:
+  monitoring-net:
+    name: nas-monitoring
+    driver: bridge
+  default:
+    external: true
+    name: bridge  # Usa network bridge esistente per compatibilità
