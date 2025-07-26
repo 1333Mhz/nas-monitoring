@@ -30,7 +30,8 @@ services:
     environment:
       - DOCKER_HOST=/var/run/docker.sock
       - NETDATA_DISABLE_TELEMETRY=1
-    
+    networks:
+      - monitoring-net
   # =================== SMART & DISK MONITORING ===================
   
   # Scrutiny - SMART monitoring dischi sda, sdb, nvme
@@ -56,7 +57,8 @@ services:
       - /dev/sda
       - /dev/sdb
       - /dev/nvme0n1
-      
+    networks:
+      - monitoring-net  
   # =================== BACKUP VERSIONING ===================
   
   # Duplicati - Backup automatico /mnt/nas/docker/ con versioning
@@ -75,6 +77,8 @@ services:
       - /tmp:/tmp                            # Temp space
     ports:
       - "8200:8200"  # Porta libera
+    networks:
+      - monitoring-net
       
   # =================== SERVICE MONITORING ===================
   
@@ -89,6 +93,8 @@ services:
       - "3001:3001"  # Porta libera
     environment:
       - TZ=Europe/Rome
+    networks:
+      - monitoring-net
       
   # =================== BTRFS MAINTENANCE ===================
   
@@ -124,7 +130,8 @@ services:
         echo \"- Bi-weekly defrag: 15th day 4 AM\" >> /var/log/btrfs.log &&
         crond -f -d 8
       "
-    
+    networks:
+      - monitoring-net  
   # =================== TELEGRAM BOT ENHANCED ===================
   
   # Bot Telegram integrato con tutti i servizi
