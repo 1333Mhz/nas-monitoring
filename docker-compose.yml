@@ -70,6 +70,7 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=Europe/Rome
+      - SETTINGS_ENCRYPTION_KEY=MySecretKey123!
     volumes:
       - duplicati_config:/config
       - /mnt/nas/docker:/source:ro           # Source: dati container
