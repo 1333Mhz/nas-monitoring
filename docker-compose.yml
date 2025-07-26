@@ -172,6 +172,3 @@ networks:
   monitoring-net:
     name: nas-monitoring
     driver: bridge
-  default:
-    external: true
-    name: bridge  # Usa network bridge esistente per compatibilità
